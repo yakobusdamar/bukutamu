@@ -561,21 +561,42 @@
             // Create Html5Qrcode instance
             html5QrCode = new Html5Qrcode("reader");
             
-            // Configuration - remove qrbox to scan entire camera view
+            // Configuration - optimized for V380 FHD Camera
             const config = {
                 fps: 10,
                 // No qrbox - scans entire camera frame
-                aspectRatio: 1.0
+                aspectRatio: 1.777, // 16:9 for FHD
+                disableFlip: false
             };
 
-            // Start scanning with back camera
+            // High-resolution camera constraints for V380 FHD
+            const cameraConfig = {
+                facingMode: "environment",
+                advanced: [{
+                    width: { min: 1280, ideal: 1920, max: 1920 },
+                    height: { min: 720, ideal: 1080, max: 1080 },
+                    frameRate: { ideal: 30, max: 60 },
+                    focusMode: { ideal: "continuous" },
+                    exposureMode: { ideal: "continuous" },
+                    whiteBalanceMode: { ideal: "continuous" }
+                }]
+            };
+
+            // Start scanning with high-resolution settings
             html5QrCode.start(
-                { facingMode: "environment" },
+                cameraConfig,
                 config,
                 onScanSuccess,
                 onScanFailure
             ).then(() => {
                 console.log("✓ Scanner started successfully (full frame scanning enabled)");
+                console.log("📹 Requesting FHD resolution: 1920x1080");
+                
+                // Log actual video resolution
+                const video = document.querySelector('#reader video');
+                if (video) {
+                    console.log(`📊 Actual video resolution: ${video.videoWidth}x${video.videoHeight}`);
+                }
             }).catch(err => {
                 console.error("✗ Scanner start error:", err);
                 document.getElementById('statusText').textContent = "Camera access denied";
