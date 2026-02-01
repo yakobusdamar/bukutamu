@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>QR Code Scan Entrance</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <!-- Theme Configuration -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ec1337", 
+                        "rose-gold": "#C59398",
+                        "rose-gold-dark": "#9D6B70",
+                        "champagne": "#F9F4F2",
+                        "background-light": "#f8f6f6",
+                        "background-dark": "#221013",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "2xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .scan-line {
+            animation: scan 2.5s ease-in-out infinite;
+            background: linear-gradient(to bottom, 
+                transparent, 
+                rgba(197, 147, 152, 0.3), 
+                rgba(197, 147, 152, 0.8),
+                rgba(197, 147, 152, 0.3),
+                transparent);
+            height: 3px;
+            filter: blur(1px);
+        }
+        @keyframes scan {
+            0%, 100% { 
+                top: 10%; 
+                opacity: 0;
+            }
+            50% { 
+                top: 90%; 
+                opacity: 1;
+            }
+        }
+        
+        /* Pulsing corner markers when scanning */
+        .corner-pulse {
+            animation: cornerPulse 2s ease-in-out infinite;
+        }
+        @keyframes cornerPulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 15px rgba(197, 147, 152, 0.5);
+            }
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 25px rgba(197, 147, 152, 0.8);
+            }
+        }
+        
+        /* Recent scans slide animation */
+        .recent-scan-item {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Sync status pulse */
+        .sync-pulse {
+            animation: syncPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes syncPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        body {
+            min-height: max(884px, 100dvh);
+        }
+        /* Hide default scanner UI elements */
+        #reader__dashboard_section {
+            display: none !important;
+        }
+        #reader__dashboard_section_csr {
+            display: none !important;
+        }
+        /* Style the video element */
+        #reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        /* Modal animations */
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .modal-content {
+            animation: modalFadeIn 0.3s ease-out;
+        }
+        /* Notification animations */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -100%);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+            to {
+                opacity: 0;
+                transform: translate(-50%, -100%);
+            }
+        }
+        .notification-enter {
+            animation: slideDown 0.3s ease-out;
+        }
+        .notification-exit {
+            animation: slideUp 0.3s ease-in;
+        }
+    </style>
+</head>
+<body class="h-screen w-full overflow-hidden bg-black text-[#1b0d10] font-display">
+    <!-- Camera Feed Background -->
+    <div class="absolute inset-0 z-0">
+        <div id="reader" class="h-full w-full"></div>
+    </div>
+
+    <!-- Main Content Layer -->
+    <div class="relative z-10 flex h-full flex-col justify-between">
+        <!-- Top Section: Header & Instructions -->
+        <div class="rounded-b-[2.5rem] bg-gradient-to-b from-[#fffefc] to-[#fbf7f6]/95 pb-8 pt-safe shadow-lg backdrop-blur-sm">
+            <!-- Top App Bar -->
+            <div class="flex items-center justify-between p-4 pb-2">
+                <button onclick="closeScanner()" class="group flex size-12 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-rose-50 active:bg-rose-100">
+                    <span class="material-symbols-outlined text-rose-gold-dark text-3xl">close</span>
+                </button>
+                <div class="text-center">
+                    <h2 class="font-serif text-rose-gold-dark text-lg font-semibold tracking-wide">Sarah & James</h2>
+                    <p class="text-rose-gold text-xs font-medium">Wedding Check-in</p>
+                </div>
+                <button onclick="showHelp()" class="group flex size-12 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-rose-50 active:bg-rose-100">
+                    <span class="material-symbols-outlined text-rose-gold-dark text-2xl">help</span>
+                </button>
+            </div>
+            
+            <!-- Scan Counter -->
+            <div class="mt-2 px-4 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-rose-gold text-sm">people</span>
+                <p id="scanCounter" class="text-rose-gold-dark text-sm font-medium">
+                    <span id="scannedCount">0</span> guests checked in
+                </p>
+                <div id="syncStatus" class="flex items-center gap-1 ml-2">
+                    <div class="h-2 w-2 rounded-full bg-green-500"></div>
+                    <span class="text-xs text-gray-500">Synced</span>
+                </div>
+            </div>
+            <!-- Headline Text -->
+            <div class="mt-4 px-8 text-center">
+                <h1 class="font-serif text-[#4A3B3E] text-3xl font-medium leading-tight">
+                    Please scan your<br/>invitation QR code
+                </h1>
+                <p id="statusText" class="text-rose-gold-dark mt-2 text-sm font-medium tracking-wide opacity-80">
+                    Place code inside the frame
+                </p>
+            </div>
+        </div>
+
+        <!-- Middle Section: Viewfinder -->
+        <div class="flex flex-1 flex-col items-center justify-center p-8">
+            <!-- Viewfinder Frame -->
+            <div class="relative aspect-square w-full max-w-[280px]">
+                <!-- Corner Markers (Rose Gold) - Single border design -->
+                <div id="topLeft" class="corner-pulse absolute left-0 top-0 h-12 w-12 border-l-4 border-t-4 border-rose-gold rounded-tl-2xl transition-all"></div>
+                <div id="topRight" class="corner-pulse absolute right-0 top-0 h-12 w-12 border-r-4 border-t-4 border-rose-gold rounded-tr-2xl transition-all"></div>
+                <div id="bottomLeft" class="corner-pulse absolute bottom-0 left-0 h-12 w-12 border-l-4 border-b-4 border-rose-gold rounded-bl-2xl transition-all"></div>
+                <div id="bottomRight" class="corner-pulse absolute bottom-0 right-0 h-12 w-12 border-r-4 border-b-4 border-rose-gold rounded-br-2xl transition-all"></div>
+                
+                <!-- Animated Scan Line -->
+                <div id="scanLine" class="scan-line absolute left-2 right-2 h-0.5 rounded-full bg-rose-gold/80 blur-[2px]"></div>
+                
+                <!-- Center Focus Visual Hint -->
+                <div class="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Section: Controls -->
+        <div class="rounded-t-[2.5rem] bg-gradient-to-b from-[#fbf7f6]/95 to-[#fffefc] pb-8 pt-8 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] backdrop-blur-sm">
+            <div class="flex flex-col items-center gap-6 px-6">
+                <!-- Flashlight Control -->
+                <div class="flex items-center justify-center">
+                    <button id="flashlightBtn" onclick="toggleFlashlight()" class="group flex size-14 items-center justify-center rounded-full bg-white shadow-[0_4px_12px_rgba(157,107,112,0.15)] ring-1 ring-rose-gold/20 transition-all hover:scale-105 active:scale-95">
+                        <span id="flashlightIcon" class="material-symbols-outlined text-rose-gold-dark transition-colors group-hover:text-primary">flashlight_off</span>
+                    </button>
+                </div>
+                
+                <!-- Manual Entry Button -->
+                <button onclick="manualEntry()" class="flex w-full max-w-[320px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-gold/30 bg-transparent py-3.5 text-center transition-colors hover:bg-rose-50 active:bg-rose-100">
+                    <span class="material-symbols-outlined text-rose-gold-dark text-lg">keyboard</span>
+                    <span class="text-rose-gold-dark text-sm font-bold tracking-wide">Enter Guest Code Manually</span>
+                </button>
+            </div>
+            <div class="h-2"></div>
+            
+            <!-- Recent Scans List -->
+            <div id="recentScansContainer" class="mt-4 px-6 hidden">
+                <div class="rounded-xl bg-white/60 backdrop-blur-sm p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-rose-gold-dark text-sm font-semibold uppercase tracking-wide">Recent Check-ins</h3>
+                        <button onclick="clearRecentScans()" class="text-rose-gold text-xs hover:text-rose-gold-dark">Clear</button>
+                    </div>
+                    <div id="recentScansList" class="space-y-2 max-h-48 overflow-y-auto">
+                        <!-- Recent scans will be added here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed top-4 left-1/2 -translate-x-1/2 z-40 hidden">
+        <div class="rounded-xl bg-red-500 px-6 py-4 shadow-lg flex items-center gap-3">
+            <span class="material-symbols-outlined text-white text-2xl">error</span>
+            <p class="text-white font-medium" id="notificationText">Invalid QR Code</p>
+        </div>
+    </div>
+
+    <!-- Guest Info Modal -->
+    <div id="guestModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+        <div class="modal-content w-full max-w-md rounded-2xl bg-gradient-to-b from-[#fffefc] to-[#fbf7f6] shadow-2xl">
+            <!-- Modal Header -->
+            <div class="border-b border-rose-gold/20 p-6 text-center">
+                <div class="mb-4 flex justify-center">
+                    <div class="flex h-16 w-16 items-center justify-center rounded-full bg-rose-gold/10">
+                        <span class="material-symbols-outlined text-rose-gold text-4xl">person</span>
+                    </div>
+                </div>
+                <h3 class="font-serif text-[#4A3B3E] text-2xl font-semibold">Welcome!</h3>
+                <p class="text-rose-gold-dark mt-1 text-sm">Guest Information</p>
+            </div>
+
+            <!-- Guest Details -->
+            <div class="p-6 space-y-4">
+                <!-- Guest Name -->
+                <div class="rounded-xl bg-white/80 p-4 shadow-sm">
+                    <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Name</p>
+                    <p id="guestName" class="font-serif text-[#4A3B3E] text-xl font-semibold">-</p>
+                </div>
+
+                <!-- Table Number -->
+                <div class="rounded-xl bg-white/80 p-4 shadow-sm">
+                    <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Table Number</p>
+                    <p id="tableNumber" class="font-serif text-[#4A3B3E] text-xl font-semibold">-</p>
+                </div>
+
+                <!-- Guest Count -->
+                <div class="rounded-xl bg-white/80 p-4 shadow-sm">
+                    <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Number of Guests</p>
+                    <p id="guestCount" class="font-serif text-[#4A3B3E] text-xl font-semibold">-</p>
+                </div>
+
+                <!-- Special Notes (Optional) -->
+                <div id="notesSection" class="rounded-xl bg-white/80 p-4 shadow-sm hidden">
+                    <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Special Notes</p>
+                    <p id="specialNotes" class="text-[#4A3B3E] text-sm">-</p>
+                </div>
+            </div>
+
+            <!-- Modal Actions -->
+            <div class="border-t border-rose-gold/20 p-6 flex gap-3">
+                <button onclick="closeModal()" class="flex-1 rounded-xl border border-rose-gold/30 bg-transparent py-3 text-center text-rose-gold-dark font-medium transition-colors hover:bg-rose-50 active:bg-rose-100">
+                    Cancel
+                </button>
+                <button onclick="confirmCheckIn()" class="flex-1 rounded-xl bg-rose-gold py-3 text-center text-white font-semibold shadow-md transition-all hover:bg-rose-gold-dark active:scale-95">
+                    Confirm Check-in
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Decorative Texture Overlay -->
+    <div class="pointer-events-none absolute inset-0 z-20 mix-blend-overlay opacity-[0.03]" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDr7G-kUdX_89be2loGQiyv5XYoFzg1vnaufh4Q2EyXEqeTfhhgiExX3osXaY7or9SW3yo_DKCA50zzYqjs51nS-aGCvSuakAHuwGFFCrq80ERdFxa_TS54LirGxERR3tyBLLL1h8g6aiZDSftaB21obNkmF8U4fpYeHBczD0HTH0vd6qF98AMsuwdR4UU16jqJqJkK6hPOgZjzmZrL0KWnaYogG8oE2eeBXyfYURmdEUqs86FA8l7RBWC11J-Rrya2s2nCNeopkuc');"></div>
+
+    <script>
+        // Global variables
+        let html5QrCode;
+        let flashlightOn = false;
+        let scannedData = null;
+        let scanCooldown = false;
+        
+        // Bride & Groom names (customize these)
+        const BRIDE_NAME = "Sarah";
+        const GROOM_NAME = "James";
+        
+        // LocalStorage keys
+        const STORAGE_KEYS = {
+            SCANNED_GUESTS: 'wedding_scanned_guests',
+            SCAN_COUNT: 'wedding_scan_count',
+            PENDING_SYNC: 'wedding_pending_sync'
+        };
+        
+        // Mock API endpoint (replace with your actual backend)
+        const API_ENDPOINT = 'https://your-wedding-api.com/checkin';
+        
+        // Initialize localStorage
+        function initLocalStorage() {
+            if (!localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS)) {
+                localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify([]));
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.SCAN_COUNT)) {
+                localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, '0');
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.PENDING_SYNC)) {
+                localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify([]));
+            }
+        }
+        
+        // Get scanned guests from localStorage
+        function getScannedGuests() {
+            const data = localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS);
+            return JSON.parse(data || '[]');
+        }
+        
+        // Save scanned guest to localStorage
+        function saveScannedGuest(guestData) {
+            const guests = getScannedGuests();
+            const newGuest = {
+                ...guestData,
+                timestamp: new Date().toISOString(),
+                synced: false
+            };
+            
+            // Add to beginning of array
+            guests.unshift(newGuest);
+            
+            // Keep only last 5
+            const recentGuests = guests.slice(0, 5);
+            
+            localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify(recentGuests));
+            
+            // Increment count
+            const count = parseInt(localStorage.getItem(STORAGE_KEYS.SCAN_COUNT) || '0');
+            localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, (count + 1).toString());
+            
+            // Add to pending sync queue
+            addToPendingSync(newGuest);
+            
+            // Update UI
+            updateScanCounter();
+            updateRecentScansList();
+            
+            // Try to sync
+            syncToBackend();
+        }
+        
+        // Add to pending sync queue
+        function addToPendingSync(guestData) {
+            const pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '[]');
+            pending.push(guestData);
+            localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(pending));
+        }
+        
+        // Sync to backend (mock implementation)
+        async function syncToBackend() {
+            const pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '[]');
+            
+            if (pending.length === 0) {
+                updateSyncStatus('synced');
+                return;
+            }
+            
+            updateSyncStatus('syncing');
+            
+            try {
+                // Mock API call - replace with your actual API
+                console.log('🔄 Syncing to backend:', pending);
+                
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Mock response - in real implementation, check response.ok
+                const mockSuccess = Math.random() > 0.1; // 90% success rate
+                
+                if (mockSuccess) {
+                    console.log('✅ Sync successful');
+                    
+                    // Mark guests as synced
+                    const guests = getScannedGuests();
+                    guests.forEach(g => g.synced = true);
+                    localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify(guests));
+                    
+                    // Clear pending queue
+                    localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify([]));
+                    
+                    updateSyncStatus('synced');
+                } else {
+                    throw new Error('Sync failed');
+                }
+                
+                /* Real API implementation would look like:
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pending)
+                });
+                
+                if (response.ok) {
+                    // Clear pending queue
+                    localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify([]));
+                    updateSyncStatus('synced');
+                } else {
+                    throw new Error('Sync failed');
+                }
+                */
+            } catch (error) {
+                console.error('❌ Sync error:', error);
+                updateSyncStatus('offline');
+                
+                // Retry after 30 seconds
+                setTimeout(syncToBackend, 30000);
+            }
+        }
+        
+        // Update sync status indicator
+        function updateSyncStatus(status) {
+            const syncStatus = document.getElementById('syncStatus');
+            const dot = syncStatus.querySelector('div');
+            const text = syncStatus.querySelector('span');
+            
+            dot.className = 'h-2 w-2 rounded-full';
+            
+            switch(status) {
+                case 'synced':
+                    dot.classList.add('bg-green-500');
+                    text.textContent = 'Synced';
+                    dot.classList.remove('sync-pulse');
+                    break;
+                case 'syncing':
+                    dot.classList.add('bg-yellow-500', 'sync-pulse');
+                    text.textContent = 'Syncing...';
+                    break;
+                case 'offline':
+                    dot.classList.add('bg-red-500');
+                    text.textContent = 'Offline';
+                    dot.classList.remove('sync-pulse');
+                    break;
+            }
+        }
+        
+        // Update scan counter
+        function updateScanCounter() {
+            const count = localStorage.getItem(STORAGE_KEYS.SCAN_COUNT) || '0';
+            document.getElementById('scannedCount').textContent = count;
+        }
+        
+        // Update recent scans list
+        function updateRecentScansList() {
+            const guests = getScannedGuests();
+            const container = document.getElementById('recentScansContainer');
+            const list = document.getElementById('recentScansList');
+            
+            if (guests.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+            
+            container.classList.remove('hidden');
+            list.innerHTML = '';
+            
+            guests.forEach((guest, index) => {
+                const item = document.createElement('div');
+                item.className = 'recent-scan-item flex items-center justify-between p-3 bg-white/80 rounded-lg';
+                
+                const time = new Date(guest.timestamp).toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-8 w-8 items-center justify-center rounded-full ${guest.synced ? 'bg-green-100' : 'bg-yellow-100'}">
+                            <span class="material-symbols-outlined text-sm ${guest.synced ? 'text-green-600' : 'text-yellow-600'}">
+                                ${guest.synced ? 'check_circle' : 'schedule'}
+                            </span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">${guest.name}</p>
+                            <p class="text-xs text-gray-500">Table ${guest.table} • ${time}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400">${guest.guests} ${guest.guests === '1' ? 'guest' : 'guests'}</span>
+                `;
+                
+                list.appendChild(item);
+            });
+        }
+        
+        // Clear recent scans
+        function clearRecentScans() {
+            if (confirm('Clear all recent check-ins from this device? (Data synced to server will remain safe)')) {
+                localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify([]));
+                localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, '0');
+                updateScanCounter();
+                updateRecentScansList();
+                console.log('🗑️ Recent scans cleared');
+            }
+        }
+
+        // Initialize scanner following html5-qrcode docs
+        function initScanner() {
+            console.log("=== Initializing QR Scanner ===");
+            
+            // Create Html5Qrcode instance
+            html5QrCode = new Html5Qrcode("reader");
+            
+            // Configuration
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 }
+            };
+
+            // Start scanning with back camera
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                console.log("✓ Scanner started successfully");
+            }).catch(err => {
+                console.error("✗ Scanner start error:", err);
+                document.getElementById('statusText').textContent = "Camera access denied";
+                document.getElementById('statusText').classList.add('text-red-500');
+            });
+        }
+
+        // Success callback - called when QR code is detected
+        function onScanSuccess(decodedText, decodedResult) {
+            // Prevent multiple rapid scans
+            if (scanCooldown) {
+                console.log("⏸️ Scan cooldown active, ignoring scan");
+                return;
+            }
+
+            // DEBUG: Log everything about the scan
+            console.log("=== QR CODE DETECTED ===");
+            console.log("📝 Raw decoded text:", decodedText);
+            console.log("📦 Full decoded result:", decodedResult);
+            console.log("📊 Result format:", decodedResult.result?.format);
+            console.log("========================");
+
+            // Set cooldown
+            scanCooldown = true;
+            
+            // Validate QR code
+            const validationResult = validateQRCode(decodedText);
+            
+            if (!validationResult.isValid) {
+                console.log("❌ QR validation failed:", validationResult.reason);
+                showWrongQRNotification();
+                
+                // Reset cooldown after 3 seconds
+                setTimeout(() => {
+                    scanCooldown = false;
+                    console.log("✓ Cooldown reset, ready for next scan");
+                }, 3000);
+                return;
+            }
+
+            console.log("✅ QR validation passed");
+            
+            // Parse guest data
+            const guestData = parseGuestData(decodedText);
+            console.log("👤 Parsed guest data:", guestData);
+            
+            scannedData = guestData;
+            
+            // Visual feedback - green corners
+            updateCornerMarkers('success');
+            
+            // Stop scan line
+            document.getElementById('scanLine').style.display = 'none';
+            
+            // Update status
+            document.getElementById('statusText').textContent = "QR Code Detected!";
+            document.getElementById('statusText').classList.remove('text-rose-gold-dark');
+            document.getElementById('statusText').classList.add('text-green-600');
+            
+            // Show modal immediately (no delay)
+            showGuestModal(guestData);
+            scanCooldown = false;
+        }
+
+        // Failure callback - called when scanning fails
+        function onScanFailure(error) {
+            // Ignore - this is called continuously during scanning
+        }
+
+        // Validate QR code
+        function validateQRCode(decodedText) {
+            console.log("🔍 Validating QR code...");
+            
+            // Method 1: Check if it's valid JSON with required fields
+            try {
+                const data = JSON.parse(decodedText);
+                if (data.name && data.table && data.guests) {
+                    console.log("✓ Valid JSON format with all required fields");
+                    return { isValid: true };
+                }
+                console.log("✗ JSON missing required fields (name, table, guests)");
+                return { isValid: false, reason: "Missing required fields" };
+            } catch (e) {
+                // Not JSON, try other validation methods
+            }
+            
+            // Method 2: Check if it starts with specific prefix
+            if (decodedText.startsWith('WEDDING2024-')) {
+                console.log("✓ Valid wedding code prefix");
+                return { isValid: true };
+            }
+            
+            // Method 3: Add your custom validation here
+            // Example: Check against database, verify format, etc.
+            
+            console.log("✗ No validation method matched");
+            return { isValid: false, reason: "Invalid QR code format" };
+        }
+
+        // Parse guest data from QR code
+        function parseGuestData(decodedText) {
+            // Try to parse as JSON first
+            try {
+                const data = JSON.parse(decodedText);
+                return {
+                    name: data.name || '-',
+                    table: data.table || '-',
+                    guests: data.guests || '-',
+                    notes: data.notes || ''
+                };
+            } catch (e) {
+                // Not JSON, parse as simple code
+                return {
+                    name: decodedText.replace('WEDDING2024-', 'Guest '),
+                    table: 'TBD',
+                    guests: '1',
+                    notes: ''
+                };
+            }
+        }
+
+        // Update corner markers color
+        function updateCornerMarkers(state) {
+            const corners = ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'];
+            
+            corners.forEach(id => {
+                const el = document.getElementById(id);
+                if (state === 'success') {
+                    el.classList.remove('border-rose-gold', 'corner-pulse');
+                    el.classList.add('border-green-500');
+                    el.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.6)';
+                } else {
+                    el.classList.add('border-rose-gold', 'corner-pulse');
+                    el.classList.remove('border-green-500');
+                    el.style.boxShadow = '';
+                }
+            });
+        }
+
+        // Show wrong QR notification
+        function showWrongQRNotification() {
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notificationText');
+            
+            notificationText.textContent = "Invalid QR Code - Please try again";
+            
+            notification.classList.remove('hidden', 'notification-exit');
+            notification.classList.add('notification-enter');
+            
+            setTimeout(() => {
+                notification.classList.remove('notification-enter');
+                notification.classList.add('notification-exit');
+                
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                }, 300);
+            }, 2500);
+        }
+
+        // Show guest info modal
+        function showGuestModal(data) {
+            console.log("📋 Showing guest modal");
+            
+            document.getElementById('guestName').textContent = data.name || '-';
+            document.getElementById('tableNumber').textContent = data.table || '-';
+            document.getElementById('guestCount').textContent = data.guests || '-';
+            
+            if (data.notes && data.notes.trim() !== '') {
+                document.getElementById('specialNotes').textContent = data.notes;
+                document.getElementById('notesSection').classList.remove('hidden');
+            } else {
+                document.getElementById('notesSection').classList.add('hidden');
+            }
+            
+            const modal = document.getElementById('guestModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // Close modal and resume scanning
+        function closeModal() {
+            console.log("🔄 Closing modal and resuming scan");
+            
+            const modal = document.getElementById('guestModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            
+            // Reset visual elements
+            updateCornerMarkers('default');
+            
+            document.getElementById('statusText').textContent = "Place code inside the frame";
+            document.getElementById('statusText').classList.add('text-rose-gold-dark');
+            document.getElementById('statusText').classList.remove('text-green-600');
+            
+            document.getElementById('scanLine').style.display = 'block';
+        }
+
+        // Confirm check-in
+        function confirmCheckIn() {
+            console.log("✅ Check-in confirmed for:", scannedData);
+            
+            // Save to localStorage
+            saveScannedGuest(scannedData);
+            
+            // Show success notification
+            const notification = document.getElementById('notification');
+            const notificationText = document.getElementById('notificationText');
+            
+            notification.querySelector('div').classList.remove('bg-red-500');
+            notification.querySelector('div').classList.add('bg-green-500');
+            notification.querySelector('.material-symbols-outlined').textContent = 'check_circle';
+            notificationText.textContent = `${scannedData.name} checked in!`;
+            
+            notification.classList.remove('hidden', 'notification-exit');
+            notification.classList.add('notification-enter');
+            
+            // Close modal
+            document.getElementById('guestModal').classList.add('hidden');
+            document.getElementById('guestModal').classList.remove('flex');
+            
+            // Reset notification and resume after 2 seconds
+            setTimeout(() => {
+                notification.classList.remove('notification-enter');
+                notification.classList.add('notification-exit');
+                
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                    notification.querySelector('div').classList.add('bg-red-500');
+                    notification.querySelector('div').classList.remove('bg-green-500');
+                    notification.querySelector('.material-symbols-outlined').textContent = 'error';
+                    closeModal();
+                }, 300);
+            }, 2000);
+        }
+
+        // Toggle flashlight
+        async function toggleFlashlight() {
+            console.log("💡 Toggling flashlight");
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                if (!capabilities.torch) {
+                    console.log("✗ Flashlight not available");
+                    alert('Flashlight not available on this device');
+                    return;
+                }
+                
+                flashlightOn = !flashlightOn;
+                
+                await track.applyConstraints({
+                    advanced: [{ torch: flashlightOn }]
+                });
+                
+                const icon = document.getElementById('flashlightIcon');
+                icon.textContent = flashlightOn ? 'flashlight_on' : 'flashlight_off';
+                icon.classList.toggle('text-primary', flashlightOn);
+                
+                console.log(`✓ Flashlight ${flashlightOn ? 'ON' : 'OFF'}`);
+            } catch (err) {
+                console.error('✗ Flashlight error:', err);
+            }
+        }
+
+        // Manual entry
+        function manualEntry() {
+            console.log("⌨️ Manual entry initiated");
+            
+            const code = prompt('Enter guest code (e.g., WEDDING2024-001 or JSON):');
+            if (code && code.trim()) {
+                const trimmedCode = code.trim();
+                console.log("📝 Manual code entered:", trimmedCode);
+                
+                const validationResult = validateQRCode(trimmedCode);
+                
+                if (!validationResult.isValid) {
+                    console.log("❌ Manual code validation failed");
+                    showWrongQRNotification();
+                    return;
+                }
+                
+                const guestData = parseGuestData(trimmedCode);
+                scannedData = guestData;
+                showGuestModal(guestData);
+            }
+        }
+
+        // Close scanner
+        function closeScanner() {
+            console.log("❌ Closing scanner");
+            
+            if (html5QrCode) {
+                html5QrCode.stop().then(() => {
+                    console.log("✓ Scanner stopped");
+                }).catch(err => {
+                    console.error("✗ Error stopping scanner:", err);
+                });
+            }
+            window.history.back();
+        }
+
+        // Show help
+        function showHelp() {
+            alert('How to scan:\n\n1. Point camera at QR code\n2. Keep code centered in frame\n3. Hold steady until detected\n4. Valid codes show guest info\n5. Invalid codes show error\n\n⏱️ 3-second cooldown between scans\n💡 Use flashlight in dim lighting\n\nCheck browser console for debug info!');
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            console.log("🚀 Page loaded");
+            initLocalStorage();
+            updateScanCounter();
+            updateRecentScansList();
+            syncToBackend(); // Try to sync on load
+            initScanner();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (html5QrCode) {
+                html5QrCode.stop();
+            }
+        });
+    </script>
+</body>
+</html>

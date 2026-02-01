@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Guest Management Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&amp;family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "rose-gold": "#C59398",
+                        "rose-gold-light": "#E5D1D3",
+                        "rose-gold-dark": "#9D6B70",
+                        "ivory": "#FFFEFC",
+                        "champagne": "#F9F4F2",
+                        "background-light": "#FDFBFB",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-background-light text-[#4A3B3E] font-display antialiased;
+            }
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <nav class="sticky top-0 z-50 bg-ivory border-b-[3px] border-rose-gold/20 shadow-sm px-4 pt-safe">
+        <div class="flex h-16 items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-rose-gold-dark">menu</span>
+                <h1 class="font-serif text-xl font-semibold text-rose-gold-dark tracking-tight">Guest List</h1>
+            </div>
+            <div class="flex items-center gap-2">
+                <button class="flex size-10 items-center justify-center rounded-full bg-rose-gold/5">
+                    <span class="material-symbols-outlined text-rose-gold-dark">search</span>
+                </button>
+                <div
+                    class="size-9 rounded-full bg-rose-gold-light border border-rose-gold/30 flex items-center justify-center">
+                    <span class="text-xs font-bold text-rose-gold-dark">AD</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <main class="p-4 space-y-6">
+        <div class="grid grid-cols-3 gap-3">
+            <div class="bg-white p-3 rounded-xl border border-rose-gold/30 shadow-sm text-center">
+                <p class="text-[10px] uppercase tracking-wider font-bold text-rose-gold-dark/60">Total</p>
+                <p id="totalGuests" class="text-xl font-serif font-bold text-rose-gold-dark">0</p>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-rose-gold/30 shadow-sm text-center">
+                <p class="text-[10px] uppercase tracking-wider font-bold text-rose-gold-dark/60">Checked</p>
+                <p id="checkedGuests" class="text-xl font-serif font-bold text-rose-gold-dark">0</p>
+            </div>
+            <div class="bg-white p-3 rounded-xl border border-rose-gold/30 shadow-sm text-center">
+                <p class="text-[10px] uppercase tracking-wider font-bold text-rose-gold-dark/60">Left</p>
+                <p id="leftGuests" class="text-xl font-serif font-bold text-rose-gold-dark">0</p>
+            </div>
+        </div>
+        <div class="flex gap-3">
+            <button
+                class="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-rose-gold text-rose-gold-dark py-2.5 px-4 font-bold text-sm transition-active active:bg-rose-gold/10">
+                <span class="material-symbols-outlined text-sm">person_add</span>
+                Add Guest
+            </button>
+            <button
+                class="flex-1 flex items-center justify-center gap-2 rounded-lg border-2 border-rose-gold text-rose-gold-dark py-2.5 px-4 font-bold text-sm transition-active active:bg-rose-gold/10">
+                <span class="material-symbols-outlined text-sm">ios_share</span>
+                Export
+            </button>
+        </div>
+        <div class="bg-white rounded-2xl border border-rose-gold/20 shadow-sm overflow-hidden">
+            <div class="p-4 border-b border-rose-gold/10 flex justify-between items-center">
+                <h3 class="font-serif font-semibold text-rose-gold-dark">Guest Registry</h3>
+                <span class="text-[11px] font-bold text-rose-gold/60 uppercase tracking-widest">Update: Just now</span>
+            </div>
+            <div class="overflow-x-auto no-scrollbar">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr
+                            class="bg-champagne/30 text-[11px] uppercase tracking-wider font-bold text-rose-gold-dark/70">
+                            <th class="px-4 py-3">Guest Name</th>
+                            <th class="px-4 py-3">Table</th>
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Size</th>
+                            <th class="px-4 py-3">Check-in</th>
+                        </tr>
+                    </thead>
+                    <tbody id="guestList" class="divide-y divide-rose-gold/5">
+                        <!-- Guest rows will be dynamically added here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="p-4 bg-ivory text-center">
+                <button class="text-xs font-bold text-rose-gold-dark hover:underline">View All Guests</button>
+            </div>
+        </div>
+    </main>
+    <div class="fixed bottom-8 right-6">
+        <button
+            class="size-14 rounded-full bg-rose-gold shadow-lg shadow-rose-gold/40 flex items-center justify-center text-white active:scale-95 transition-transform">
+            <span class="material-symbols-outlined text-2xl">qr_code_scanner</span>
+        </button>
+    </div>
+    <div
+        class="pointer-events-none fixed inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background-light to-transparent opacity-60">
+    </div>
+
+    <script>
+        const STORAGE_KEYS = {
+            SCANNED_GUESTS: 'wedding_scanned_guests',
+            SCAN_COUNT: 'wedding_scan_count',
+            PENDING_SYNC: 'wedding_pending_sync'
+        };
+
+        const MOCK_GUESTS = [
+            { name: "John Doe", table: "5", guests: "2", notes: "Vegetarian" },
+            { name: "Jane Smith", table: "3", guests: "1", notes: "" },
+            { name: "Michael Johnson", table: "7", guests: "3", notes: "Allergic to nuts" },
+            { name: "Emily Davis", table: "2", guests: "2", notes: "" },
+            { name: "Chris Brown", table: "8", guests: "4", notes: "Vegan" },
+            { name: "Sarah Wilson", table: "6", guests: "1", notes: "" },
+            { name: "David Lee", table: "9", guests: "2", notes: "Gluten-free" },
+            { name: "Sophia Martinez", table: "4", guests: "3", notes: "" },
+            { name: "James Anderson", table: "10", guests: "2", notes: "" },
+            { name: "Olivia Taylor", table: "1", guests: "1", notes: "" },
+            { name: "William Thomas", table: "11", guests: "2", notes: "" },
+            { name: "Isabella Moore", table: "12", guests: "3", notes: "" },
+            { name: "Benjamin Harris", table: "13", guests: "1", notes: "" },
+            { name: "Mia Clark", table: "14", guests: "2", notes: "" },
+            { name: "Lucas Lewis", table: "15", guests: "4", notes: "" },
+            { name: "Charlotte Walker", table: "16", guests: "2", notes: "" }
+        ];
+
+        function initMockGuests() {
+            const existingGuests = JSON.parse(localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS) || '[]');
+            const newGuests = [...MOCK_GUESTS, ...existingGuests];
+            localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify(newGuests));
+            localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, newGuests.length.toString());
+        }
+
+        function updateGuestList() {
+            const guests = JSON.parse(localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS) || '[]');
+            const guestList = document.getElementById('guestList');
+            guestList.innerHTML = '';
+
+            guests.forEach(guest => {
+                const row = document.createElement('tr');
+                row.className = 'active:bg-rose-gold/5 transition-colors';
+                row.innerHTML = `
+                <td class="px-4 py-4">
+                    <p class="text-sm font-semibold text-[#4A3B3E]">${guest.name}</p>
+                    <p class="text-[10px] text-rose-gold-dark/60">${guest.notes || 'No notes'}</p>
+                </td>
+                <td class="px-4 py-4 text-sm font-medium">${guest.table}</td>
+                <td class="px-4 py-4">
+                    <span class="bg-slate-100 text-slate-500 text-[10px] font-bold px-2 py-0.5 rounded-full">GUEST</span>
+                </td>
+                <td class="px-4 py-4 text-sm">${guest.guests}</td>
+                <td class="px-4 py-4">
+                    <span class="material-symbols-outlined text-slate-300">radio_button_unchecked</span>
+                </td>
+            `;
+                guestList.appendChild(row);
+            });
+
+            // Update total, checked, and left counts
+            document.getElementById('totalGuests').textContent = guests.length;
+            document.getElementById('checkedGuests').textContent = guests.filter(g => g.checked).length;
+            document.getElementById('leftGuests').textContent = guests.filter(g => !g.checked).length;
+        }
+
+        window.addEventListener('load', () => {
+            initMockGuests();
+            updateGuestList();
+        });
+    </script>
+</body>
+
+</html>
