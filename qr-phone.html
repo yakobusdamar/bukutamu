@@ -263,8 +263,24 @@
 
         <!-- Bottom Controls -->
         <div class="safe-bottom bg-gradient-to-t from-black/80 via-black/60 to-transparent pt-6 pb-6">
-            <!-- Flashlight Toggle -->
-            <div class="flex justify-center mb-6">
+            <!-- Camera Controls -->
+            <div class="px-6 mb-4">
+                <!-- Camera Selection Dropdown -->
+                <div class="mb-3">
+                    <select id="cameraSelect" class="w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-3 text-white text-sm font-medium appearance-none">
+                        <option value="" class="bg-gray-800">Select Camera...</option>
+                    </select>
+                </div>
+                
+                <!-- Start/Stop Camera Button -->
+                <button id="cameraBtn" onclick="toggleCamera()" class="touch-feedback w-full flex items-center justify-center gap-2 bg-rose-gold backdrop-blur-md rounded-2xl py-4 shadow-lg active:bg-rose-gold-dark">
+                    <span id="cameraBtnIcon" class="material-symbols-outlined text-white text-2xl">videocam</span>
+                    <span id="cameraBtnText" class="text-white text-base font-semibold">Start Camera</span>
+                </button>
+            </div>
+            
+            <!-- Flashlight Toggle (hidden until camera starts) -->
+            <div id="flashlightContainer" class="hidden flex justify-center mb-6">
                 <button id="flashlightBtn" onclick="toggleFlashlight()" class="touch-feedback flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-md shadow-lg active:bg-white/30">
                     <span id="flashlightIcon" class="material-symbols-outlined text-white text-3xl">flashlight_off</span>
                 </button>
@@ -380,6 +396,8 @@
         let flashlightOn = false;
         let scannedData = null;
         let scanCooldown = false;
+        let isScanning = false;
+        let availableCameras = [];
         
         // Configuration
         const BRIDE_NAME = "Sarah";
@@ -388,7 +406,8 @@
         const STORAGE_KEYS = {
             SCANNED_GUESTS: 'wedding_scanned_guests',
             SCAN_COUNT: 'wedding_scan_count',
-            PENDING_SYNC: 'wedding_pending_sync'
+            PENDING_SYNC: 'wedding_pending_sync',
+            SELECTED_CAMERA: 'wedding_selected_camera'
         };
         
         const API_ENDPOINT = 'https://your-wedding-api.com/checkin';
@@ -565,33 +584,103 @@
             }
         }
 
-        // Initialize QR Scanner
-        function initScanner() {
-            console.log("=== Initializing Mobile QR Scanner ===");
+        // Get available cameras
+        async function loadCameras() {
+            console.log("📹 Loading available cameras...");
             
-            html5QrCode = new Html5Qrcode("reader");
-            
-            const config = {
-                fps: 10,
-                aspectRatio: 0.75, // Portrait for mobile
-                disableFlip: false,
-                videoConstraints: {
-                    width: { min: 720, ideal: 1080, max: 1920 },
-                    height: { min: 1280, ideal: 1920, max: 2560 },
-                    frameRate: { ideal: 30 }
-                }
-            };
-
-            const cameraConfig = { facingMode: "environment" };
-
-            html5QrCode.start(
-                cameraConfig,
-                config,
-                onScanSuccess,
-                onScanFailure
-            ).then(() => {
-                console.log("✓ Mobile scanner started");
+            try {
+                const cameras = await Html5Qrcode.getCameras();
+                availableCameras = cameras;
                 
+                console.log("✓ Found cameras:", cameras);
+                
+                const select = document.getElementById('cameraSelect');
+                select.innerHTML = '<option value="" class="bg-gray-800">Select Camera...</option>';
+                
+                cameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = camera.id;
+                    option.textContent = camera.label || `Camera ${index + 1}`;
+                    option.className = 'bg-gray-800';
+                    select.appendChild(option);
+                });
+                
+                // Auto-select back camera if available
+                const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'));
+                if (backCamera) {
+                    select.value = backCamera.id;
+                    console.log("✓ Auto-selected back camera:", backCamera.label);
+                } else if (cameras.length > 0) {
+                    select.value = cameras[0].id;
+                }
+                
+                // Load saved camera preference
+                const savedCamera = localStorage.getItem(STORAGE_KEYS.SELECTED_CAMERA);
+                if (savedCamera) {
+                    select.value = savedCamera;
+                }
+                
+            } catch (error) {
+                console.error("✗ Error loading cameras:", error);
+                alert("Could not access cameras. Please allow camera permission.");
+            }
+        }
+
+        // Toggle camera on/off
+        async function toggleCamera() {
+            if (isScanning) {
+                await stopScanner();
+            } else {
+                await startScanner();
+            }
+        }
+
+        // Start scanner
+        async function startScanner() {
+            const cameraId = document.getElementById('cameraSelect').value;
+            
+            if (!cameraId) {
+                alert('Please select a camera first');
+                return;
+            }
+            
+            console.log("=== Starting Scanner ===");
+            console.log("📹 Camera ID:", cameraId);
+            
+            try {
+                html5QrCode = new Html5Qrcode("reader");
+                
+                const config = {
+                    fps: 10,
+                    aspectRatio: 0.75,
+                    disableFlip: false,
+                    videoConstraints: {
+                        width: { min: 720, ideal: 1080, max: 1920 },
+                        height: { min: 1280, ideal: 1920, max: 2560 },
+                        frameRate: { ideal: 30 }
+                    }
+                };
+
+                await html5QrCode.start(
+                    cameraId,
+                    config,
+                    onScanSuccess,
+                    onScanFailure
+                );
+                
+                console.log("✓ Scanner started successfully");
+                isScanning = true;
+                
+                // Update UI
+                document.getElementById('cameraBtnIcon').textContent = 'videocam_off';
+                document.getElementById('cameraBtnText').textContent = 'Stop Camera';
+                document.getElementById('cameraSelect').disabled = true;
+                document.getElementById('flashlightContainer').classList.remove('hidden');
+                
+                // Save camera preference
+                localStorage.setItem(STORAGE_KEYS.SELECTED_CAMERA, cameraId);
+                
+                // Apply advanced settings
                 setTimeout(() => {
                     const video = document.querySelector('#reader video');
                     if (video && video.srcObject) {
@@ -599,10 +688,41 @@
                         applyAdvancedCameraSettings(video.srcObject);
                     }
                 }, 1000);
-            }).catch(err => {
-                console.error("✗ Scanner error:", err);
-                document.getElementById('statusText').textContent = "Camera access denied";
-            });
+                
+            } catch (error) {
+                console.error("✗ Error starting scanner:", error);
+                alert("Failed to start camera: " + error);
+            }
+        }
+
+        // Stop scanner
+        async function stopScanner() {
+            if (!html5QrCode) return;
+            
+            console.log("⏸️ Stopping scanner...");
+            
+            try {
+                await html5QrCode.stop();
+                console.log("✓ Scanner stopped");
+                
+                isScanning = false;
+                flashlightOn = false;
+                
+                // Update UI
+                document.getElementById('cameraBtnIcon').textContent = 'videocam';
+                document.getElementById('cameraBtnText').textContent = 'Start Camera';
+                document.getElementById('cameraSelect').disabled = false;
+                document.getElementById('flashlightContainer').classList.add('hidden');
+                document.getElementById('flashlightIcon').textContent = 'flashlight_off';
+                
+                // Reset viewfinder
+                updateCornerMarkers('default');
+                document.getElementById('scanLine').style.display = 'block';
+                document.getElementById('statusText').textContent = 'Point camera at QR code';
+                
+            } catch (error) {
+                console.error("✗ Error stopping scanner:", error);
+            }
         }
         
         async function applyAdvancedCameraSettings(stream) {
@@ -654,7 +774,6 @@
                 console.log("❌ Invalid:", validationResult.reason);
                 showWrongQRNotification();
                 
-                // Haptic feedback for error
                 if (navigator.vibrate) {
                     navigator.vibrate([50, 100, 50]);
                 }
@@ -674,7 +793,6 @@
             document.getElementById('scanLine').style.display = 'none';
             document.getElementById('statusText').textContent = "QR Detected!";
             
-            // Haptic feedback for success
             if (navigator.vibrate) {
                 navigator.vibrate(100);
             }
@@ -791,15 +909,17 @@
         }
 
         async function toggleFlashlight() {
+            if (!isScanning) return;
+            
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" } 
-                });
-                const track = stream.getVideoTracks()[0];
+                const video = document.querySelector('#reader video');
+                if (!video || !video.srcObject) return;
+                
+                const track = video.srcObject.getVideoTracks()[0];
                 const capabilities = track.getCapabilities();
                 
                 if (!capabilities.torch) {
-                    alert('Flashlight not available');
+                    alert('Flashlight not available on this camera');
                     return;
                 }
                 
@@ -808,8 +928,11 @@
                 
                 const icon = document.getElementById('flashlightIcon');
                 icon.textContent = flashlightOn ? 'flashlight_on' : 'flashlight_off';
+                
+                console.log(`💡 Flashlight ${flashlightOn ? 'ON' : 'OFF'}`);
             } catch (err) {
                 console.error('Flashlight error:', err);
+                alert('Could not toggle flashlight');
             }
         }
 
@@ -829,25 +952,27 @@
         }
 
         function showSettings() {
-            alert('Settings coming soon!\n\n- Adjust scan sensitivity\n- Change camera\n- Export data');
+            alert('Settings\n\n• Camera is selected from dropdown\n• Resolution: Auto (up to 1080p)\n• Continuous autofocus enabled\n• Center exposure point\n\nData is stored locally and synced when online.');
         }
 
         function showHelp() {
-            alert('Wedding Scanner Help\n\n1. Point camera at QR code\n2. Code will be detected automatically\n3. Review guest info\n4. Confirm check-in\n\nFeatures:\n• Works offline\n• Auto-syncs when online\n• View recent check-ins\n• Manual code entry\n\nHold phone steady for best results!');
+            alert('Wedding Scanner Help\n\n1. Select camera from dropdown\n2. Press "Start Camera"\n3. Point at QR code\n4. Code detected automatically\n5. Review and confirm\n\nFeatures:\n• Works offline\n• Auto-syncs online\n• Recent check-ins\n• Manual code entry\n• Flashlight support\n\nHold phone steady!');
         }
 
         // Initialize
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             console.log("🚀 Mobile scanner loading");
             initLocalStorage();
             updateScanCounter();
             updateRecentScansList();
             syncToBackend();
-            initScanner();
+            await loadCameras();
         });
 
-        window.addEventListener('beforeunload', () => {
-            if (html5QrCode) html5QrCode.stop();
+        window.addEventListener('beforeunload', async () => {
+            if (isScanning) {
+                await stopScanner();
+            }
         });
     </script>
 </body>
