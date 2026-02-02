@@ -593,6 +593,10 @@
                 availableCameras = cameras;
                 
                 console.log("✓ Found cameras:", cameras);
+                console.log("📋 Camera details:");
+                cameras.forEach((cam, idx) => {
+                    console.log(`  ${idx}: ${cam.label} (ID: ${cam.id})`);
+                });
                 
                 const select = document.getElementById('cameraSelect');
                 select.innerHTML = '<option value="" class="bg-gray-800">Select Camera...</option>';
@@ -605,19 +609,39 @@
                     select.appendChild(option);
                 });
                 
-                // Auto-select back camera if available
-                const backCamera = cameras.find(c => c.label.toLowerCase().includes('back') || c.label.toLowerCase().includes('rear'));
-                if (backCamera) {
-                    select.value = backCamera.id;
-                    console.log("✓ Auto-selected back camera:", backCamera.label);
-                } else if (cameras.length > 0) {
-                    select.value = cameras[0].id;
+                // Load saved camera preference first
+                const savedCamera = localStorage.getItem(STORAGE_KEYS.SELECTED_CAMERA);
+                if (savedCamera && cameras.find(c => c.id === savedCamera)) {
+                    select.value = savedCamera;
+                    console.log("✓ Loaded saved camera preference");
+                    return;
                 }
                 
-                // Load saved camera preference
-                const savedCamera = localStorage.getItem(STORAGE_KEYS.SELECTED_CAMERA);
-                if (savedCamera) {
-                    select.value = savedCamera;
+                // Auto-select back camera - try multiple methods
+                let selectedCamera = null;
+                
+                // Method 1: Check for "back" or "rear" in label (case insensitive)
+                selectedCamera = cameras.find(c => {
+                    const label = c.label.toLowerCase();
+                    return label.includes('back') || 
+                           label.includes('rear') || 
+                           label.includes('belakang') ||
+                           label.includes('environment');
+                });
+                
+                // Method 2: Check for "facing: environment" in device capabilities
+                if (!selectedCamera && cameras.length > 0) {
+                    // Usually back camera is the last one in the list
+                    selectedCamera = cameras[cameras.length - 1];
+                    console.log("⚠️ Could not find 'back' keyword, selecting last camera (usually back)");
+                }
+                
+                if (selectedCamera) {
+                    select.value = selectedCamera.id;
+                    console.log(`✓ Auto-selected: ${selectedCamera.label}`);
+                } else if (cameras.length > 0) {
+                    select.value = cameras[0].id;
+                    console.log("⚠️ Defaulting to first camera");
                 }
                 
             } catch (error) {
