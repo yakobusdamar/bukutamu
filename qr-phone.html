@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html class="light" lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+    <meta name="theme-color" content="#000000"/>
+    <title>Wedding Check-in Scanner</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet"/>
+    <!-- Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <!-- QR Code Scanner Library -->
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    
+    <!-- Theme Configuration -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#ec1337", 
+                        "rose-gold": "#C59398",
+                        "rose-gold-dark": "#9D6B70",
+                        "champagne": "#F9F4F2",
+                        "background-light": "#f8f6f6",
+                        "background-dark": "#221013",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"],
+                        "serif": ["Playfair Display", "serif"],
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+        }
+        
+        html, body {
+            overscroll-behavior: none;
+            height: 100%;
+            overflow: hidden;
+        }
+        
+        body {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            font-family: 'Manrope', sans-serif;
+        }
+        
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Smooth scan line animation */
+        .scan-line {
+            animation: scan 2.5s ease-in-out infinite;
+            background: linear-gradient(to bottom, 
+                transparent, 
+                rgba(197, 147, 152, 0.3), 
+                rgba(197, 147, 152, 0.8),
+                rgba(197, 147, 152, 0.3),
+                transparent);
+            height: 3px;
+            filter: blur(1px);
+        }
+        @keyframes scan {
+            0%, 100% { top: 10%; opacity: 0; }
+            50% { top: 90%; opacity: 1; }
+        }
+        
+        /* Pulsing corner markers */
+        .corner-pulse {
+            animation: cornerPulse 2s ease-in-out infinite;
+        }
+        @keyframes cornerPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        /* Hide default scanner UI */
+        #reader__dashboard_section,
+        #reader__dashboard_section_csr {
+            display: none !important;
+        }
+        
+        /* Flip camera horizontally */
+        #reader {
+            transform: scaleX(-1);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #reader video {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover;
+        }
+        
+        /* Modal animations */
+        @keyframes modalSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .modal-enter {
+            animation: modalSlideUp 0.3s ease-out;
+        }
+        
+        /* Notification animations */
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateY(-100%);
+            }
+        }
+        .notification-enter {
+            animation: slideDown 0.3s ease-out;
+        }
+        .notification-exit {
+            animation: slideUp 0.3s ease-in;
+        }
+        
+        /* Safe area padding for iOS */
+        .safe-top {
+            padding-top: env(safe-area-inset-top);
+        }
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        
+        /* Recent scans animation */
+        .recent-scan-item {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        /* Sync status pulse */
+        .sync-pulse {
+            animation: syncPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes syncPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        
+        /* Touch feedback */
+        .touch-feedback:active {
+            transform: scale(0.95);
+            transition: transform 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <!-- Camera Feed Background -->
+    <div class="absolute inset-0 z-0">
+        <div id="reader"></div>
+    </div>
+
+    <!-- Main Content Overlay -->
+    <div class="relative z-10 flex h-full flex-col">
+        <!-- Top Header -->
+        <div class="safe-top bg-gradient-to-b from-black/80 via-black/60 to-transparent pt-4 pb-6 backdrop-blur-sm">
+            <!-- Top Bar -->
+            <div class="flex items-center justify-between px-4 mb-3">
+                <button onclick="showSettings()" class="touch-feedback flex h-12 w-12 items-center justify-center rounded-full bg-white/10 backdrop-blur-md active:bg-white/20">
+                    <span class="material-symbols-outlined text-white text-2xl">settings</span>
+                </button>
+                <div class="text-center">
+                    <h2 class="font-serif text-white text-xl font-semibold tracking-wide">Sarah & James</h2>
+                    <p class="text-rose-gold text-xs font-medium mt-0.5">Wedding Scanner</p>
+                </div>
+                <button onclick="showHelp()" class="touch-feedback flex h-12 w-12 items-center justify-center rounded-full bg-white/10 backdrop-blur-md active:bg-white/20">
+                    <span class="material-symbols-outlined text-white text-2xl">help</span>
+                </button>
+            </div>
+            
+            <!-- Scan Counter & Status -->
+            <div class="flex items-center justify-center gap-4 px-4">
+                <div class="flex items-center gap-2 bg-white/10 backdrop-blur-md rounded-full px-4 py-2">
+                    <span class="material-symbols-outlined text-rose-gold text-sm">people</span>
+                    <p class="text-white text-sm font-medium">
+                        <span id="scannedCount">0</span> checked in
+                    </p>
+                </div>
+                <div id="syncStatus" class="flex items-center gap-1.5 bg-white/10 backdrop-blur-md rounded-full px-3 py-2">
+                    <div class="h-2 w-2 rounded-full bg-green-500"></div>
+                    <span class="text-xs text-white/80">Synced</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Viewfinder Area -->
+        <div class="flex flex-1 items-center justify-center px-6">
+            <div class="relative w-full max-w-xs">
+                <!-- Instruction Text Above -->
+                <div class="mb-4 text-center">
+                    <p id="statusText" class="text-white text-sm font-medium drop-shadow-lg">
+                        Point camera at QR code
+                    </p>
+                </div>
+                
+                <!-- Viewfinder Frame -->
+                <div class="relative aspect-square w-full">
+                    <!-- Corner Markers -->
+                    <div class="corner-pulse absolute left-0 top-0 h-16 w-16 border-l-4 border-t-4 border-rose-gold rounded-tl-3xl"></div>
+                    <div class="corner-pulse absolute right-0 top-0 h-16 w-16 border-r-4 border-t-4 border-rose-gold rounded-tr-3xl"></div>
+                    <div class="corner-pulse absolute bottom-0 left-0 h-16 w-16 border-l-4 border-b-4 border-rose-gold rounded-bl-3xl"></div>
+                    <div class="corner-pulse absolute bottom-0 right-0 h-16 w-16 border-r-4 border-b-4 border-rose-gold rounded-br-3xl"></div>
+                    
+                    <!-- Scan Line -->
+                    <div id="scanLine" class="scan-line absolute left-4 right-4 h-0.5 rounded-full"></div>
+                    
+                    <!-- Center Focus Hint -->
+                    <div class="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/20"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="safe-bottom bg-gradient-to-t from-black/80 via-black/60 to-transparent pt-6 pb-6">
+            <!-- Flashlight Toggle -->
+            <div class="flex justify-center mb-6">
+                <button id="flashlightBtn" onclick="toggleFlashlight()" class="touch-feedback flex h-16 w-16 items-center justify-center rounded-full bg-white/20 backdrop-blur-md shadow-lg active:bg-white/30">
+                    <span id="flashlightIcon" class="material-symbols-outlined text-white text-3xl">flashlight_off</span>
+                </button>
+            </div>
+            
+            <!-- Manual Entry Button -->
+            <div class="px-6 mb-4">
+                <button onclick="manualEntry()" class="touch-feedback w-full flex items-center justify-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl py-4 active:bg-white/20">
+                    <span class="material-symbols-outlined text-white text-xl">keyboard</span>
+                    <span class="text-white text-sm font-semibold">Enter Code Manually</span>
+                </button>
+            </div>
+            
+            <!-- Recent Scans Toggle -->
+            <div class="px-6">
+                <button onclick="toggleRecentScans()" class="touch-feedback w-full flex items-center justify-center gap-2 bg-rose-gold/20 backdrop-blur-md border border-rose-gold/30 rounded-2xl py-3">
+                    <span class="material-symbols-outlined text-rose-gold text-lg">history</span>
+                    <span class="text-rose-gold text-sm font-semibold">Recent Check-ins</span>
+                    <span id="recentBadge" class="ml-1 bg-rose-gold text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="fixed top-20 left-4 right-4 z-40 hidden">
+        <div class="rounded-2xl bg-red-500 px-5 py-4 shadow-2xl flex items-center gap-3">
+            <span class="material-symbols-outlined text-white text-2xl">error</span>
+            <p class="text-white font-medium flex-1" id="notificationText">Invalid QR Code</p>
+        </div>
+    </div>
+
+    <!-- Recent Scans Bottom Sheet -->
+    <div id="recentScansSheet" class="fixed inset-0 z-50 hidden">
+        <div onclick="toggleRecentScans()" class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="modal-enter absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[70vh] overflow-hidden">
+            <div class="safe-bottom">
+                <!-- Handle -->
+                <div class="flex justify-center pt-3 pb-2">
+                    <div class="w-12 h-1 bg-gray-300 rounded-full"></div>
+                </div>
+                
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                    <h3 class="font-serif text-gray-800 text-xl font-semibold">Recent Check-ins</h3>
+                    <button onclick="clearRecentScans()" class="text-rose-gold text-sm font-medium">Clear All</button>
+                </div>
+                
+                <!-- List -->
+                <div id="recentScansList" class="overflow-y-auto max-h-96 px-6 py-4">
+                    <p class="text-center text-gray-400 text-sm py-8">No recent check-ins</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Guest Info Modal -->
+    <div id="guestModal" class="fixed inset-0 z-50 hidden">
+        <div onclick="closeModal()" class="absolute inset-0 bg-black/70 backdrop-blur-sm"></div>
+        <div class="absolute inset-x-4 top-1/2 -translate-y-1/2">
+            <div class="modal-enter bg-white rounded-3xl shadow-2xl overflow-hidden max-w-md mx-auto">
+                <!-- Header -->
+                <div class="bg-gradient-to-br from-rose-gold/10 to-champagne p-6 text-center border-b border-rose-gold/20">
+                    <div class="mb-4 flex justify-center">
+                        <div class="flex h-20 w-20 items-center justify-center rounded-full bg-rose-gold/20">
+                            <span class="material-symbols-outlined text-rose-gold text-5xl">person</span>
+                        </div>
+                    </div>
+                    <h3 class="font-serif text-gray-800 text-2xl font-semibold">Welcome!</h3>
+                    <p class="text-rose-gold-dark mt-1 text-sm">Guest Information</p>
+                </div>
+
+                <!-- Details -->
+                <div class="p-6 space-y-4 max-h-80 overflow-y-auto">
+                    <div class="bg-gray-50 rounded-2xl p-4">
+                        <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Name</p>
+                        <p id="guestName" class="font-serif text-gray-800 text-xl font-semibold">-</p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-gray-50 rounded-2xl p-4">
+                            <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Table</p>
+                            <p id="tableNumber" class="font-serif text-gray-800 text-lg font-semibold">-</p>
+                        </div>
+                        <div class="bg-gray-50 rounded-2xl p-4">
+                            <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Guests</p>
+                            <p id="guestCount" class="font-serif text-gray-800 text-lg font-semibold">-</p>
+                        </div>
+                    </div>
+
+                    <div id="notesSection" class="bg-gray-50 rounded-2xl p-4 hidden">
+                        <p class="text-rose-gold-dark text-xs font-medium uppercase tracking-wide mb-1">Notes</p>
+                        <p id="specialNotes" class="text-gray-700 text-sm">-</p>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="p-6 pt-0 flex gap-3">
+                    <button onclick="closeModal()" class="touch-feedback flex-1 rounded-2xl border-2 border-gray-200 bg-white py-4 text-center text-gray-700 font-semibold">
+                        Cancel
+                    </button>
+                    <button onclick="confirmCheckIn()" class="touch-feedback flex-1 rounded-2xl bg-rose-gold py-4 text-center text-white font-semibold shadow-lg">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let html5QrCode;
+        let flashlightOn = false;
+        let scannedData = null;
+        let scanCooldown = false;
+        
+        // Configuration
+        const BRIDE_NAME = "Sarah";
+        const GROOM_NAME = "James";
+        
+        const STORAGE_KEYS = {
+            SCANNED_GUESTS: 'wedding_scanned_guests',
+            SCAN_COUNT: 'wedding_scan_count',
+            PENDING_SYNC: 'wedding_pending_sync'
+        };
+        
+        const API_ENDPOINT = 'https://your-wedding-api.com/checkin';
+        
+        // Prevent iOS bounce scroll
+        document.addEventListener('touchmove', function(e) {
+            if (e.target.closest('.overflow-y-auto')) return;
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Initialize localStorage
+        function initLocalStorage() {
+            if (!localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS)) {
+                localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify([]));
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.SCAN_COUNT)) {
+                localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, '0');
+            }
+            if (!localStorage.getItem(STORAGE_KEYS.PENDING_SYNC)) {
+                localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify([]));
+            }
+        }
+        
+        function getScannedGuests() {
+            return JSON.parse(localStorage.getItem(STORAGE_KEYS.SCANNED_GUESTS) || '[]');
+        }
+        
+        function saveScannedGuest(guestData) {
+            const guests = getScannedGuests();
+            const newGuest = {
+                ...guestData,
+                timestamp: new Date().toISOString(),
+                synced: false
+            };
+            
+            guests.unshift(newGuest);
+            const recentGuests = guests.slice(0, 5);
+            
+            localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify(recentGuests));
+            
+            const count = parseInt(localStorage.getItem(STORAGE_KEYS.SCAN_COUNT) || '0');
+            localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, (count + 1).toString());
+            
+            addToPendingSync(newGuest);
+            updateScanCounter();
+            updateRecentScansList();
+            syncToBackend();
+            
+            // Haptic feedback on iOS
+            if (navigator.vibrate) {
+                navigator.vibrate(50);
+            }
+        }
+        
+        function addToPendingSync(guestData) {
+            const pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '[]');
+            pending.push(guestData);
+            localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify(pending));
+        }
+        
+        async function syncToBackend() {
+            const pending = JSON.parse(localStorage.getItem(STORAGE_KEYS.PENDING_SYNC) || '[]');
+            
+            if (pending.length === 0) {
+                updateSyncStatus('synced');
+                return;
+            }
+            
+            updateSyncStatus('syncing');
+            
+            try {
+                console.log('🔄 Syncing to backend:', pending);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const mockSuccess = Math.random() > 0.1;
+                
+                if (mockSuccess) {
+                    console.log('✅ Sync successful');
+                    const guests = getScannedGuests();
+                    guests.forEach(g => g.synced = true);
+                    localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify(guests));
+                    localStorage.setItem(STORAGE_KEYS.PENDING_SYNC, JSON.stringify([]));
+                    updateSyncStatus('synced');
+                } else {
+                    throw new Error('Sync failed');
+                }
+            } catch (error) {
+                console.error('❌ Sync error:', error);
+                updateSyncStatus('offline');
+                setTimeout(syncToBackend, 30000);
+            }
+        }
+        
+        function updateSyncStatus(status) {
+            const syncStatus = document.getElementById('syncStatus');
+            const dot = syncStatus.querySelector('div');
+            const text = syncStatus.querySelector('span');
+            
+            dot.className = 'h-2 w-2 rounded-full';
+            
+            switch(status) {
+                case 'synced':
+                    dot.classList.add('bg-green-500');
+                    text.textContent = 'Synced';
+                    break;
+                case 'syncing':
+                    dot.classList.add('bg-yellow-500', 'sync-pulse');
+                    text.textContent = 'Syncing';
+                    break;
+                case 'offline':
+                    dot.classList.add('bg-red-500');
+                    text.textContent = 'Offline';
+                    break;
+            }
+        }
+        
+        function updateScanCounter() {
+            const count = localStorage.getItem(STORAGE_KEYS.SCAN_COUNT) || '0';
+            document.getElementById('scannedCount').textContent = count;
+            document.getElementById('recentBadge').textContent = count;
+        }
+        
+        function updateRecentScansList() {
+            const guests = getScannedGuests();
+            const list = document.getElementById('recentScansList');
+            
+            if (guests.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-400 text-sm py-8">No recent check-ins</p>';
+                return;
+            }
+            
+            list.innerHTML = '';
+            
+            guests.forEach(guest => {
+                const time = new Date(guest.timestamp).toLocaleTimeString('en-US', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                const item = document.createElement('div');
+                item.className = 'recent-scan-item flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-3';
+                
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-10 w-10 items-center justify-center rounded-full ${guest.synced ? 'bg-green-100' : 'bg-yellow-100'}">
+                            <span class="material-symbols-outlined text-sm ${guest.synced ? 'text-green-600' : 'text-yellow-600'}">
+                                ${guest.synced ? 'check_circle' : 'schedule'}
+                            </span>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-800">${guest.name}</p>
+                            <p class="text-xs text-gray-500">Table ${guest.table} • ${time}</p>
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400">${guest.guests} ${guest.guests === '1' ? 'guest' : 'guests'}</span>
+                `;
+                
+                list.appendChild(item);
+            });
+        }
+        
+        function toggleRecentScans() {
+            const sheet = document.getElementById('recentScansSheet');
+            sheet.classList.toggle('hidden');
+        }
+        
+        function clearRecentScans() {
+            if (confirm('Clear all recent check-ins from this device?')) {
+                localStorage.setItem(STORAGE_KEYS.SCANNED_GUESTS, JSON.stringify([]));
+                localStorage.setItem(STORAGE_KEYS.SCAN_COUNT, '0');
+                updateScanCounter();
+                updateRecentScansList();
+                toggleRecentScans();
+            }
+        }
+
+        // Initialize QR Scanner
+        function initScanner() {
+            console.log("=== Initializing Mobile QR Scanner ===");
+            
+            html5QrCode = new Html5Qrcode("reader");
+            
+            const config = {
+                fps: 10,
+                aspectRatio: 0.75, // Portrait for mobile
+                disableFlip: false,
+                videoConstraints: {
+                    width: { min: 720, ideal: 1080, max: 1920 },
+                    height: { min: 1280, ideal: 1920, max: 2560 },
+                    frameRate: { ideal: 30 }
+                }
+            };
+
+            const cameraConfig = { facingMode: "environment" };
+
+            html5QrCode.start(
+                cameraConfig,
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                console.log("✓ Mobile scanner started");
+                
+                setTimeout(() => {
+                    const video = document.querySelector('#reader video');
+                    if (video && video.srcObject) {
+                        console.log(`📊 Video: ${video.videoWidth}x${video.videoHeight}`);
+                        applyAdvancedCameraSettings(video.srcObject);
+                    }
+                }, 1000);
+            }).catch(err => {
+                console.error("✗ Scanner error:", err);
+                document.getElementById('statusText').textContent = "Camera access denied";
+            });
+        }
+        
+        async function applyAdvancedCameraSettings(stream) {
+            try {
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                console.log("📷 Camera capabilities:", capabilities);
+                
+                const constraints = { advanced: [] };
+                
+                if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                    constraints.advanced.push({ focusMode: 'continuous' });
+                }
+                
+                if (capabilities.exposureMode && capabilities.exposureMode.includes('continuous')) {
+                    constraints.advanced.push({ exposureMode: 'continuous' });
+                }
+                
+                if (capabilities.pointsOfInterest) {
+                    constraints.advanced.push({ pointsOfInterest: [{ x: 0.5, y: 0.5 }] });
+                }
+                
+                if (capabilities.whiteBalanceMode && capabilities.whiteBalanceMode.includes('continuous')) {
+                    constraints.advanced.push({ whiteBalanceMode: 'continuous' });
+                }
+                
+                if (constraints.advanced.length > 0) {
+                    await track.applyConstraints(constraints);
+                    console.log("✅ Advanced settings applied");
+                }
+            } catch (error) {
+                console.error("❌ Settings error:", error);
+            }
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            if (scanCooldown) return;
+
+            console.log("=== QR DETECTED ===");
+            console.log("📝 Text:", decodedText);
+            console.log("📦 Result:", decodedResult);
+            
+            scanCooldown = true;
+            
+            const validationResult = validateQRCode(decodedText);
+            
+            if (!validationResult.isValid) {
+                console.log("❌ Invalid:", validationResult.reason);
+                showWrongQRNotification();
+                
+                // Haptic feedback for error
+                if (navigator.vibrate) {
+                    navigator.vibrate([50, 100, 50]);
+                }
+                
+                setTimeout(() => {
+                    scanCooldown = false;
+                }, 3000);
+                return;
+            }
+
+            console.log("✅ Valid QR");
+            
+            const guestData = parseGuestData(decodedText);
+            scannedData = guestData;
+            
+            updateCornerMarkers('success');
+            document.getElementById('scanLine').style.display = 'none';
+            document.getElementById('statusText').textContent = "QR Detected!";
+            
+            // Haptic feedback for success
+            if (navigator.vibrate) {
+                navigator.vibrate(100);
+            }
+            
+            showGuestModal(guestData);
+            scanCooldown = false;
+        }
+
+        function onScanFailure(error) {
+            // Ignore
+        }
+
+        function validateQRCode(decodedText) {
+            try {
+                const data = JSON.parse(decodedText);
+                if (data.name && data.table && data.guests) {
+                    return { isValid: true };
+                }
+                return { isValid: false, reason: "Missing fields" };
+            } catch (e) {
+                if (decodedText.startsWith('WEDDING2024-')) {
+                    return { isValid: true };
+                }
+            }
+            
+            return { isValid: false, reason: "Invalid format" };
+        }
+
+        function parseGuestData(decodedText) {
+            try {
+                return JSON.parse(decodedText);
+            } catch (e) {
+                return {
+                    name: decodedText.replace('WEDDING2024-', 'Guest '),
+                    table: 'TBD',
+                    guests: '1',
+                    notes: ''
+                };
+            }
+        }
+
+        function updateCornerMarkers(state) {
+            const corners = document.querySelectorAll('.corner-pulse');
+            corners.forEach(el => {
+                if (state === 'success') {
+                    el.classList.remove('border-rose-gold');
+                    el.classList.add('border-green-500');
+                    el.style.boxShadow = '0 0 20px rgba(34, 197, 94, 0.8)';
+                } else {
+                    el.classList.add('border-rose-gold');
+                    el.classList.remove('border-green-500');
+                    el.style.boxShadow = '';
+                }
+            });
+        }
+
+        function showWrongQRNotification() {
+            const notification = document.getElementById('notification');
+            notification.classList.remove('hidden', 'notification-exit');
+            notification.classList.add('notification-enter');
+            
+            setTimeout(() => {
+                notification.classList.add('notification-exit');
+                setTimeout(() => notification.classList.add('hidden'), 300);
+            }, 2500);
+        }
+
+        function showGuestModal(data) {
+            document.getElementById('guestName').textContent = data.name || '-';
+            document.getElementById('tableNumber').textContent = data.table || '-';
+            document.getElementById('guestCount').textContent = data.guests || '-';
+            
+            if (data.notes && data.notes.trim()) {
+                document.getElementById('specialNotes').textContent = data.notes;
+                document.getElementById('notesSection').classList.remove('hidden');
+            } else {
+                document.getElementById('notesSection').classList.add('hidden');
+            }
+            
+            document.getElementById('guestModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('guestModal').classList.add('hidden');
+            updateCornerMarkers('default');
+            document.getElementById('statusText').textContent = "Point camera at QR code";
+            document.getElementById('scanLine').style.display = 'block';
+        }
+
+        function confirmCheckIn() {
+            saveScannedGuest(scannedData);
+            
+            const notification = document.getElementById('notification');
+            notification.querySelector('div').classList.remove('bg-red-500');
+            notification.querySelector('div').classList.add('bg-green-500');
+            notification.querySelector('.material-symbols-outlined').textContent = 'check_circle';
+            document.getElementById('notificationText').textContent = `${scannedData.name} checked in!`;
+            
+            notification.classList.remove('hidden');
+            notification.classList.add('notification-enter');
+            
+            document.getElementById('guestModal').classList.add('hidden');
+            
+            setTimeout(() => {
+                notification.classList.add('notification-exit');
+                setTimeout(() => {
+                    notification.classList.add('hidden');
+                    notification.querySelector('div').classList.add('bg-red-500');
+                    notification.querySelector('div').classList.remove('bg-green-500');
+                    notification.querySelector('.material-symbols-outlined').textContent = 'error';
+                    closeModal();
+                }, 300);
+            }, 2000);
+        }
+
+        async function toggleFlashlight() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                if (!capabilities.torch) {
+                    alert('Flashlight not available');
+                    return;
+                }
+                
+                flashlightOn = !flashlightOn;
+                await track.applyConstraints({ advanced: [{ torch: flashlightOn }] });
+                
+                const icon = document.getElementById('flashlightIcon');
+                icon.textContent = flashlightOn ? 'flashlight_on' : 'flashlight_off';
+            } catch (err) {
+                console.error('Flashlight error:', err);
+            }
+        }
+
+        function manualEntry() {
+            const code = prompt('Enter guest code:');
+            if (code && code.trim()) {
+                const validationResult = validateQRCode(code.trim());
+                
+                if (!validationResult.isValid) {
+                    showWrongQRNotification();
+                    return;
+                }
+                
+                scannedData = parseGuestData(code.trim());
+                showGuestModal(scannedData);
+            }
+        }
+
+        function showSettings() {
+            alert('Settings coming soon!\n\n- Adjust scan sensitivity\n- Change camera\n- Export data');
+        }
+
+        function showHelp() {
+            alert('Wedding Scanner Help\n\n1. Point camera at QR code\n2. Code will be detected automatically\n3. Review guest info\n4. Confirm check-in\n\nFeatures:\n• Works offline\n• Auto-syncs when online\n• View recent check-ins\n• Manual code entry\n\nHold phone steady for best results!');
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            console.log("🚀 Mobile scanner loading");
+            initLocalStorage();
+            updateScanCounter();
+            updateRecentScansList();
+            syncToBackend();
+            initScanner();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            if (html5QrCode) html5QrCode.stop();
+        });
+    </script>
+</body>
+</html>
